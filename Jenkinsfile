@@ -11,7 +11,6 @@ pipeline {
         }
         stage('Build JAR') {
             steps {
-                // Run Maven build to create target/*.jar
                 sh 'mvn clean package -DskipTests'
             }
         }
