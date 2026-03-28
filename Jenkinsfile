@@ -15,7 +15,7 @@ pipeline {
     }
     post {
         always {
-            email(
+            emailext(
                 subject: "Latest Stable Build Result",
                 body: "${env.JOB_RESULT}",
                 to: "mohamed.farahat.attia@gmail.com"
