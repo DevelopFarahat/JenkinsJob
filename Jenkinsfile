@@ -4,18 +4,25 @@ pipeline {
         cron('* * * * *') // every minute
     }
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Build JAR') {
+            steps {
+                // Run Maven build to create target/*.jar
+                sh 'mvn clean package -DskipTests'
+            }
+        }
         stage('Build Docker Image') {
             steps {
-                script {
-                    // Build the image from Dockerfile in repo
-                    sh 'docker build -t job-app .'
-                }
+                sh 'docker build -t job-app .'
             }
         }
         stage('Run Latest Build') {
             steps {
                 script {
-                    // Run the container and capture output
                     def result = sh(script: "docker run --rm job-app", returnStdout: true).trim()
                     env.JOB_RESULT = result
                 }
