@@ -23,11 +23,23 @@ pipeline {
                             returnStdout: true
                         ).trim()
 
-                        echo "Daily API Call response: ${response}"
-                        env.API_RESULT = response ?: "No API result"
+                        echo "Daily API Call raw output:\n${response}"
 
-                        // If the JSON array is empty, mark UNSTABLE
-                        if (response == "[]") {
+                        // Take the last line of output (should be JSON)
+                        def lastLine = response.readLines().last()
+                        env.API_RESULT = lastLine ?: "No API result"
+
+                        // Parse JSON safely
+                        def parsed
+                        try {
+                            parsed = new groovy.json.JsonSlurper().parseText(lastLine)
+                        } catch (Exception e) {
+                            echo "Could not parse JSON: ${e.message}"
+                            parsed = null
+                        }
+
+                        // If parsed is an empty list, mark UNSTABLE
+                        if (parsed instanceof List && parsed.isEmpty()) {
                             currentBuild.result = 'UNSTABLE'
                             error("Daily API Job result list is empty → marking UNSTABLE")
                         }
@@ -43,7 +55,7 @@ pipeline {
                         script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall2 --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
-                    echo "Daily API Call 2 response: ${response2}"
+                    echo "Daily API Call 2 response:\n${response2}"
                 }
             }
         }
@@ -55,7 +67,7 @@ pipeline {
                         script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall3 --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
-                    echo "Daily API Call 3 response: ${response3}"
+                    echo "Daily API Call 3 response:\n${response3}"
                 }
             }
         }
