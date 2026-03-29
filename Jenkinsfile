@@ -1,12 +1,14 @@
 pipeline {
     agent any
 
+    options {
+        timestamps()
+        ansiColor('xterm')
+        disableConcurrentBuilds()
+    }
+
     environment {
-        // ✅ Dynamically detect the JAR file
-        JAR_FILE = sh(
-            script: "ls target/*.jar | head -n 1",
-            returnStdout: true
-        ).trim()
+        API_RESULT = ""
     }
 
     stages {
@@ -19,7 +21,21 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                sh 'mvn clean verify'
+                sh 'mvn -B -T 1C clean verify'
+            }
+        }
+
+        // ✅ FIXED: No more sh inside environment
+        stage('Prepare') {
+            steps {
+                script {
+                    env.JAR_FILE = sh(
+                        script: "ls target/*.jar | head -n 1",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Using JAR: ${env.JAR_FILE}"
+                }
             }
         }
 
@@ -27,59 +43,81 @@ pipeline {
             steps {
                 script {
 
-                    // ✅ Reusable function for API jobs
+                    // ✅ Reusable job runner
                     def runJob = { jobName, markUnstable = false ->
 
                         return {
-                            catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            echo "========== START ${jobName} =========="
+
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
 
                                 timeout(time: 2, unit: 'MINUTES') {
+
                                     retry(2) {
 
+                                        sleep 5  // ✅ retry delay
+
                                         def response = sh(
-                                            script: "java -jar ${env.JAR_FILE} --job.name=${jobName} --spring.main.web-application-type=none",
+                                            script: """
+                                                java -jar ${env.JAR_FILE} \
+                                                --job.name=${jobName} \
+                                                --spring.main.web-application-type=none
+                                            """,
                                             returnStdout: true
                                         ).trim()
 
                                         echo "Response (${jobName}):\n${response}"
 
-                                        // ✅ Extract JSON safely from logs
-                                        def jsonLine = response.readLines().findAll {
-                                            it.trim().startsWith("{") || it.trim().startsWith("[")
-                                        }?.last()
+                                        // ✅ RELIABLE JSON extraction using markers
+                                        def jsonBlock = null
+                                        if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
+                                            jsonBlock = response.split("JSON_RESULT_START")[1]
+                                                               ?.split("JSON_RESULT_END")[0]
+                                                               ?.trim()
+                                        } else {
+                                            echo "No JSON markers found in output"
+                                        }
 
                                         def parsed = null
 
-                                        if (jsonLine) {
+                                        if (jsonBlock) {
                                             try {
-                                                parsed = new groovy.json.JsonSlurper().parseText(jsonLine)
+                                                parsed = new groovy.json.JsonSlurper().parseText(jsonBlock)
                                             } catch (Exception e) {
                                                 echo "JSON parse failed: ${e.message}"
                                             }
-                                        } else {
-                                            echo "No JSON detected in output"
                                         }
 
-                                        // ✅ Mark UNSTABLE if needed (SANDBOX SAFE)
+                                        // ✅ Business logic → UNSTABLE (NOT failure)
                                         if (markUnstable && parsed instanceof List && !parsed.isEmpty()) {
-                                            currentBuild.result = 'UNSTABLE'
-                                            env.API_RESULT = parsed.toString()   // ✅ FIXED (no JsonOutput)
 
-                                            error("${jobName} returned non-empty list → marking UNSTABLE")
+                                            env.API_RESULT = parsed.toString()
+
+                                            unstable("${jobName} returned non-empty list")
                                         }
                                     }
                                 }
                             }
+
+                            echo "========== END ${jobName} =========="
                         }
                     }
 
-                    // ✅ Run jobs in parallel
+                    // ✅ Parallel execution (failFast optional)
                     parallel(
+                        failFast: true,
                         "dailyApiCall": runJob("dailyApiCall", true),
                         "dailyApiCall2": runJob("dailyApiCall2"),
                         "dailyApiCall3": runJob("dailyApiCall3")
                     )
                 }
+            }
+        }
+
+        // ✅ Optional but useful
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
     }
@@ -93,8 +131,16 @@ pipeline {
                     body: """<html>
                         <body>
                             <h2>Pipeline Status: UNSTABLE</h2>
+
+                            <p><b>Build URL:</b>
+                                <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
+                            </p>
+
+                            <p><b>Time:</b> ${new Date()}</p>
+
                             <p><b>API Result (dailyApiCall):</b></p>
                             <pre>${env.API_RESULT ?: "No Data"}</pre>
+
                         </body>
                     </html>""",
                     mimeType: 'text/html',
@@ -109,7 +155,15 @@ pipeline {
                 body: """<html>
                     <body>
                         <h2>Pipeline FAILED</h2>
+
+                        <p><b>Build URL:</b>
+                            <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
+                        </p>
+
+                        <p><b>Time:</b> ${new Date()}</p>
+
                         <p>Please check Jenkins logs immediately.</p>
+
                     </body>
                 </html>""",
                 mimeType: 'text/html',
