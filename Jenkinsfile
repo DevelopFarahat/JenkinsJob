@@ -21,11 +21,15 @@ pipeline {
        stage('Run Latest Build') {
            steps {
                script {
-                   def result = sh(script: "docker run --rm job-app echo 'Container built successfully'", returnStdout: true).trim()
+                   def result = sh(
+                       script: "docker run --rm --entrypoint echo job-app 'Container built successfully'",
+                       returnStdout: true
+                   ).trim()
                    env.JOB_RESULT = result
                }
            }
        }
+
     }
     post {
         success {
