@@ -24,7 +24,6 @@ pipeline {
             }
         }
 
-        // ✅ FIXED: No more sh inside environment
         stage('Prepare') {
             steps {
                 script {
@@ -42,7 +41,6 @@ pipeline {
             steps {
                 script {
 
-                    // ✅ Reusable job runner
                     def runJob = { jobName, markUnstable = false ->
 
                         return {
@@ -54,7 +52,7 @@ pipeline {
 
                                     retry(2) {
 
-                                        sleep 5  // ✅ retry delay
+                                        sleep 5
 
                                         def response = sh(
                                             script: """
@@ -67,14 +65,26 @@ pipeline {
 
                                         echo "Response (${jobName}):\n${response}"
 
-                                        // ✅ RELIABLE JSON extraction using markers
+                                        // ✅ Smart JSON extraction (markers + fallback)
                                         def jsonBlock = null
+
                                         if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
+
                                             jsonBlock = response.split("JSON_RESULT_START")[1]
                                                                ?.split("JSON_RESULT_END")[0]
                                                                ?.trim()
+
                                         } else {
-                                            echo "No JSON markers found in output"
+                                            def jsonLine = response.readLines().findAll {
+                                                it.trim().startsWith("{") || it.trim().startsWith("[")
+                                            }?.last()
+
+                                            if (jsonLine) {
+                                                jsonBlock = jsonLine.trim()
+                                                echo "Fallback JSON detected: ${jsonBlock}"
+                                            } else {
+                                                echo "No JSON detected at all"
+                                            }
                                         }
 
                                         def parsed = null
@@ -87,12 +97,13 @@ pipeline {
                                             }
                                         }
 
-                                        // ✅ Business logic → UNSTABLE (NOT failure)
-                                        if (markUnstable && parsed instanceof List && !parsed.isEmpty()) {
-
+                                        // ✅ Mark UNSTABLE correctly
+                                        if (markUnstable && parsed && (
+                                                (parsed instanceof List && !parsed.isEmpty()) ||
+                                                (parsed instanceof Map && !parsed.isEmpty())
+                                        )) {
                                             env.API_RESULT = parsed.toString()
-
-                                            unstable("${jobName} returned non-empty list")
+                                            unstable("${jobName} returned non-empty result")
                                         }
                                     }
                                 }
@@ -102,7 +113,6 @@ pipeline {
                         }
                     }
 
-                    // ✅ Parallel execution (failFast optional)
                     parallel(
                         failFast: true,
                         "dailyApiCall": runJob("dailyApiCall", true),
@@ -113,7 +123,6 @@ pipeline {
             }
         }
 
-        // ✅ Optional but useful
         stage('Archive') {
             steps {
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
