@@ -65,15 +65,12 @@ pipeline {
 
                                         echo "Response (${jobName}):\n${response}"
 
-                                        // ✅ Smart JSON extraction (markers + fallback)
                                         def jsonBlock = null
 
                                         if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
-
                                             jsonBlock = response.split("JSON_RESULT_START")[1]
                                                                ?.split("JSON_RESULT_END")[0]
                                                                ?.trim()
-
                                         } else {
                                             def jsonLine = response.readLines().findAll {
                                                 it.trim().startsWith("{") || it.trim().startsWith("[")
@@ -92,17 +89,19 @@ pipeline {
                                         if (jsonBlock) {
                                             try {
                                                 parsed = new groovy.json.JsonSlurper().parseText(jsonBlock)
+                                                env.API_RESULT = groovy.json.JsonOutput.prettyPrint(jsonBlock)
                                             } catch (Exception e) {
                                                 echo "JSON parse failed: ${e.message}"
+                                                env.API_RESULT = jsonBlock   // fallback raw JSON
                                             }
+                                        } else {
+                                            env.API_RESULT = response       // fallback raw response
                                         }
 
-                                        // ✅ Mark UNSTABLE correctly
                                         if (markUnstable && parsed && (
                                                 (parsed instanceof List && !parsed.isEmpty()) ||
                                                 (parsed instanceof Map && !parsed.isEmpty())
                                         )) {
-                                            env.API_RESULT = parsed.toString()
                                             unstable("${jobName} returned non-empty result")
                                         }
                                     }
@@ -147,7 +146,7 @@ pipeline {
                             <p><b>Time:</b> ${new Date()}</p>
 
                             <p><b>API Result (dailyApiCall):</b></p>
-                            <pre>${env.API_RESULT ?: "No Data"}</pre>
+                            <pre>${env.API_RESULT}</pre>
 
                         </body>
                     </html>""",
