@@ -15,7 +15,6 @@ pipeline {
 
         stage('Build Application') {
             steps {
-                // Build without running tests
                 sh 'mvn clean package -DskipTests'
             }
         }
@@ -23,15 +22,44 @@ pipeline {
         stage('Run Daily API Job') {
             steps {
                 script {
-                    // Run Spring Boot job and capture JSON output
                     def response = sh(
-                    script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none --logging.level.root=OFF --spring.main.banner-mode=off",                        returnStdout: true
+                        script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
+                        returnStdout: true
                     ).trim()
 
-                    echo "Captured response: ${response}"
-
-                    // Save response into environment for later use
+                    echo "Daily API Call response: ${response}"
                     env.API_RESULT = response ?: "No API result"
+
+                    // Fail the stage if type == dad
+                    if (response.contains('"type":"dad"')) {
+                        error("Daily API Call returned a dad joke, failing this stage.")
+                    }
+                }
+            }
+        }
+
+        stage('Run Daily API Job 2') {
+            steps {
+                script {
+                    def response2 = sh(
+                        script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall2 --spring.main.web-application-type=none",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Daily API Call 2 response: ${response2}"
+                }
+            }
+        }
+
+        stage('Run Daily API Job 3') {
+            steps {
+                script {
+                    def response3 = sh(
+                        script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall3 --spring.main.web-application-type=none",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Daily API Call 3 response: ${response3}"
                 }
             }
         }
@@ -40,12 +68,13 @@ pipeline {
     post {
         success {
             script {
+                // Email only for dailyApiCall
                 emailext(
                     subject: "Daily API Report - SUCCESS",
                     body: """<html>
                         <body>
                             <h2 style="color:green;">Pipeline Succeeded ✅</h2>
-                            <p><b>External API response:</b></p>
+                            <p><b>External API response (dailyApiCall):</b></p>
                             <pre style="background:#f4f4f4; padding:10px; border:1px solid #ccc;">
 ${env.API_RESULT}
                             </pre>
@@ -64,7 +93,7 @@ ${env.API_RESULT}
                     body: """<html>
                         <body>
                             <h2 style="color:red;">Pipeline Failed ❌</h2>
-                            <p>Please check Jenkins logs for details.</p>
+                            <p>Daily API Call failed (dad joke detected or other error). Check Jenkins logs.</p>
                         </body>
                     </html>""",
                     mimeType: 'text/html',

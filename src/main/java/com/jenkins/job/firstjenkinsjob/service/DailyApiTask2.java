@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component;
 
 
 @Component
-@ConditionalOnProperty(name = "job.name", havingValue = "dailyApiCall")
-public class DailyApiTask implements CommandLineRunner {
+@ConditionalOnProperty(name = "job.name", havingValue = "dailyApiCall2")
+public class DailyApiTask2 implements CommandLineRunner {
 
     private final ApiService apiService;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public DailyApiTask(ApiService apiService) {
+    public DailyApiTask2(ApiService apiService) {
         this.apiService = apiService;
     }
 
