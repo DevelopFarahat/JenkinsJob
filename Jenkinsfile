@@ -1,48 +1,47 @@
 pipeline {
     agent any
+    triggers {
+        cron('H 9 * * *') // run daily at 9 AM
+    }
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
-        stage('Build JAR') {
+        stage('Build Application') {
             steps {
-                // Make sure Maven is installed on Jenkins
                 sh 'mvn clean package -DskipTests'
             }
         }
-        stage('Build Docker Image') {
+        stage('Run Daily API Job') {
             steps {
-                // Build Docker image using the JAR created in target/
-                sh 'docker build -t job-app .'
+                script {
+                    def response = sh(
+                        script: "java -jar target/demo-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall",
+                        returnStdout: true
+                    ).trim()
+                    env.API_RESULT = response
+                }
             }
         }
-       stage('Run Latest Build') {
-           steps {
-               script {
-                   def result = sh(
-                       script: "docker run --rm --entrypoint echo job-app 'Container built successfully'",
-                       returnStdout: true
-                   ).trim()
-                   env.JOB_RESULT = result
-               }
-           }
-       }
-
     }
     post {
         success {
             emailext(
-                subject: "Latest Stable Build Result - SUCCESS",
-                body: "${env.JOB_RESULT}",
+                subject: "Daily API Report - SUCCESS",
+                body: """Pipeline succeeded.
+
+External API response:
+${env.API_RESULT}
+""",
                 to: "mohamed.farahat.attia@gmail.com"
             )
         }
         failure {
             emailext(
-                subject: "Latest Stable Build Result - FAILURE",
-                body: "The pipeline failed. Please check Jenkins logs for details.",
+                subject: "Daily API Report - FAILURE",
+                body: "Pipeline failed. Please check Jenkins logs.",
                 to: "mohamed.farahat.attia@gmail.com"
             )
         }
