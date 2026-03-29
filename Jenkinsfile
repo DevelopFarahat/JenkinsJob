@@ -28,18 +28,16 @@ pipeline {
         stage('Run Daily API Job') {
             steps {
                 script {
-                    // Run Spring Boot job and capture JSON output
                     def response = sh(
-                        script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall",
+                        script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
 
+                    echo "Captured response: ${response}"
                     env.API_RESULT = response ?: "No API result"
                 }
             }
         }
-    }
-
     post {
         success {
             emailext(

@@ -6,6 +6,10 @@ public class ApiResponse {
     private String punchline;
     private int id;
 
+    public ApiResponse() {
+
+    }
+
     // Getters and setters
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
