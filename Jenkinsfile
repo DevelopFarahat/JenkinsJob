@@ -16,17 +16,22 @@ pipeline {
         stage('Run Daily API Job') {
             steps {
                 script {
-                    def response = sh(
-                        script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
-                        returnStdout: true
-                    ).trim()
+                    // Wrap in catchError so the stage can fail but pipeline continues
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        def response = sh(
+                            script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
+                            returnStdout: true
+                        ).trim()
 
-                    echo "Daily API Call response: ${response}"
-                    env.API_RESULT = response ?: "No API result"
+                        echo "Daily API Call response: ${response}"
+                        env.API_RESULT = response ?: "No API result"
 
-                    // Force fail this stage unconditionally
-                    currentBuild.result = 'UNSTABLE'
-                    error("Daily API Job forced to fail (by design)")
+                        // If the JSON array is empty, mark UNSTABLE
+                        if (response == "[]") {
+                            currentBuild.result = 'UNSTABLE'
+                            error("Daily API Job result list is empty → marking UNSTABLE")
+                        }
+                    }
                 }
             }
         }
