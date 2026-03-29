@@ -14,18 +14,17 @@ pipeline {
                 sh 'mvn clean package -DskipTests'
             }
         }
-        stage('Run Daily API Job') {
-            steps {
-                script {
-                    def response = sh(
-                        script: "java -jar target/demo-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall",
-                        returnStdout: true
-                    ).trim()
-                    env.API_RESULT = response
-                }
-            }
-        }
-    }
+       stage('Run Daily API Job') {
+           steps {
+               script {
+                   def response = sh(
+                       script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall",
+                       returnStdout: true
+                   ).trim()
+                   env.API_RESULT = response
+               }
+           }
+       }
     post {
         success {
             emailext(
