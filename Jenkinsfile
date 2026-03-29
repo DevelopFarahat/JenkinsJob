@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // ✅ Dynamically detect jar instead of hardcoding
+        // ✅ Dynamically detect the JAR file
         JAR_FILE = sh(
             script: "ls target/*.jar | head -n 1",
             returnStdout: true
@@ -27,7 +27,7 @@ pipeline {
             steps {
                 script {
 
-                    // ✅ Reusable function (DRY)
+                    // ✅ Reusable function for API jobs
                     def runJob = { jobName, markUnstable = false ->
 
                         return {
@@ -43,7 +43,7 @@ pipeline {
 
                                         echo "Response (${jobName}):\n${response}"
 
-                                        // ✅ FIXED: robust JSON extraction
+                                        // ✅ Extract JSON safely from logs
                                         def jsonLine = response.readLines().findAll {
                                             it.trim().startsWith("{") || it.trim().startsWith("[")
                                         }?.last()
@@ -60,12 +60,10 @@ pipeline {
                                             echo "No JSON detected in output"
                                         }
 
-                                        // ✅ Restore UNSTABLE behavior correctly
+                                        // ✅ Mark UNSTABLE if needed (SANDBOX SAFE)
                                         if (markUnstable && parsed instanceof List && !parsed.isEmpty()) {
                                             currentBuild.result = 'UNSTABLE'
-                                            env.API_RESULT = groovy.json.JsonOutput.prettyPrint(
-                                                groovy.json.JsonOutput.toJson(parsed)
-                                            )
+                                            env.API_RESULT = parsed.toString()   // ✅ FIXED (no JsonOutput)
 
                                             error("${jobName} returned non-empty list → marking UNSTABLE")
                                         }
@@ -75,7 +73,7 @@ pipeline {
                         }
                     }
 
-                    // ✅ Parallel execution (performance boost)
+                    // ✅ Run jobs in parallel
                     parallel(
                         "dailyApiCall": runJob("dailyApiCall", true),
                         "dailyApiCall2": runJob("dailyApiCall2"),
@@ -88,7 +86,6 @@ pipeline {
 
     post {
 
-        // ✅ Only send email when something is wrong
         unstable {
             script {
                 emailext(
