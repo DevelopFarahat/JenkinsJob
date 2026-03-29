@@ -1,95 +1,105 @@
 pipeline {
     agent any
 
+    environment {
+        JAR_FILE = sh(
+            script: "ls target/*.jar | head -n 1",
+            returnStdout: true
+        ).trim()
+    }
+
     stages {
+
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
         stage('Build & Test') {
             steps {
-                // This is the release gating stage
                 sh 'mvn clean verify'
             }
         }
 
-        stage('Run Daily API Job') {
+        stage('Run API Jobs') {
             steps {
                 script {
-                    // Wrap in catchError so the stage can fail but pipeline continues
-                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                        def response = sh(
-                            script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
-                            returnStdout: true
-                        ).trim()
 
-                        echo "Daily API Call raw output:\n${response}"
+                    def runJob = { jobName, markUnstable = false ->
 
-                        // Take the last line of output (should be JSON)
-                        def lastLine = response.readLines().last()
-                        env.API_RESULT = lastLine ?: "No API result"
+                        return {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
 
-                        // Parse JSON safely
-                        def parsed
-                        try {
-                            parsed = new groovy.json.JsonSlurper().parseText(lastLine)
-                        } catch (Exception e) {
-                            echo "Could not parse JSON: ${e.message}"
-                            parsed = null
-                        }
+                                timeout(time: 2, unit: 'MINUTES') {
+                                    retry(2) {
 
-                        // If parsed is a non-empty list, mark UNSTABLE
-                        if (parsed instanceof List && !parsed.isEmpty()) {
-                            currentBuild.result = 'UNSTABLE'
-                            error("Daily API Job result list is NOT empty → marking UNSTABLE")
+                                        def response = sh(
+                                            script: "java -jar ${env.JAR_FILE} --job.name=${jobName} --spring.main.web-application-type=none",
+                                            returnStdout: true
+                                        ).trim()
+
+                                        echo "Response (${jobName}):\n${response}"
+
+                                        // Extract JSON safely
+                                        def jsonMatch = response =~ /(\{.*\}|\[.*\])/
+                                        def parsed = null
+
+                                        if (jsonMatch) {
+                                            try {
+                                                parsed = new groovy.json.JsonSlurper().parseText(jsonMatch[0])
+                                            } catch (Exception e) {
+                                                echo "JSON parse failed: ${e.message}"
+                                            }
+                                        }
+
+                                        // Special handling for main job
+                                        if (markUnstable && parsed instanceof List && !parsed.isEmpty()) {
+                                            currentBuild.result = 'UNSTABLE'
+                                            env.API_RESULT = parsed.toString()
+                                            error("${jobName} returned non-empty list")
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            }
-        }
 
-        stage('Run Daily API Job 2') {
-            steps {
-                script {
-                    def response2 = sh(
-                        script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall2 --spring.main.web-application-type=none",
-                        returnStdout: true
-                    ).trim()
-                    echo "Daily API Call 2 response:\n${response2}"
-                }
-            }
-        }
-
-        stage('Run Daily API Job 3') {
-            steps {
-                script {
-                    def response3 = sh(
-                        script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall3 --spring.main.web-application-type=none",
-                        returnStdout: true
-                    ).trim()
-                    echo "Daily API Call 3 response:\n${response3}"
+                    // Run jobs (parallel where possible)
+                    parallel(
+                        "dailyApiCall": runJob("dailyApiCall", true),
+                        "dailyApiCall2": runJob("dailyApiCall2"),
+                        "dailyApiCall3": runJob("dailyApiCall3")
+                    )
                 }
             }
         }
     }
 
     post {
-        always {
+        unstable {
             script {
-                // Email only for dailyApiCall
                 emailext(
-                    subject: "Daily API Report - ${currentBuild.result}",
+                    subject: "⚠️ Daily API Report - UNSTABLE",
                     body: """<html>
                         <body>
-                            <h2>Daily API Job Result: ${currentBuild.result}</h2>
-                            <p><b>Response (dailyApiCall):</b></p>
-                            <pre>${env.API_RESULT}</pre>
+                            <h2>Pipeline Status: UNSTABLE</h2>
+                            <p><b>API Result:</b></p>
+                            <pre>${env.API_RESULT ?: "No Data"}</pre>
                         </body>
                     </html>""",
                     mimeType: 'text/html',
                     to: "mohamed.farahat.attia@gmail.com"
                 )
             }
+        }
+
+        failure {
+            emailext(
+                subject: "❌ Pipeline FAILED",
+                body: "Check Jenkins logs immediately.",
+                to: "mohamed.farahat.attia@gmail.com"
+            )
         }
     }
 }
