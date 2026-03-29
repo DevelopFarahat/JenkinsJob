@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     environment {
+        // ✅ Dynamically detect jar instead of hardcoding
         JAR_FILE = sh(
             script: "ls target/*.jar | head -n 1",
             returnStdout: true
@@ -26,6 +27,7 @@ pipeline {
             steps {
                 script {
 
+                    // ✅ Reusable function (DRY)
                     def runJob = { jobName, markUnstable = false ->
 
                         return {
@@ -41,23 +43,31 @@ pipeline {
 
                                         echo "Response (${jobName}):\n${response}"
 
-                                        // Extract JSON safely
-                                        def jsonMatch = response =~ /(\{.*\}|\[.*\])/
+                                        // ✅ FIXED: robust JSON extraction
+                                        def jsonLine = response.readLines().findAll {
+                                            it.trim().startsWith("{") || it.trim().startsWith("[")
+                                        }?.last()
+
                                         def parsed = null
 
-                                        if (jsonMatch) {
+                                        if (jsonLine) {
                                             try {
-                                                parsed = new groovy.json.JsonSlurper().parseText(jsonMatch[0])
+                                                parsed = new groovy.json.JsonSlurper().parseText(jsonLine)
                                             } catch (Exception e) {
                                                 echo "JSON parse failed: ${e.message}"
                                             }
+                                        } else {
+                                            echo "No JSON detected in output"
                                         }
 
-                                        // Special handling for main job
+                                        // ✅ Restore UNSTABLE behavior correctly
                                         if (markUnstable && parsed instanceof List && !parsed.isEmpty()) {
                                             currentBuild.result = 'UNSTABLE'
-                                            env.API_RESULT = parsed.toString()
-                                            error("${jobName} returned non-empty list")
+                                            env.API_RESULT = groovy.json.JsonOutput.prettyPrint(
+                                                groovy.json.JsonOutput.toJson(parsed)
+                                            )
+
+                                            error("${jobName} returned non-empty list → marking UNSTABLE")
                                         }
                                     }
                                 }
@@ -65,7 +75,7 @@ pipeline {
                         }
                     }
 
-                    // Run jobs (parallel where possible)
+                    // ✅ Parallel execution (performance boost)
                     parallel(
                         "dailyApiCall": runJob("dailyApiCall", true),
                         "dailyApiCall2": runJob("dailyApiCall2"),
@@ -77,6 +87,8 @@ pipeline {
     }
 
     post {
+
+        // ✅ Only send email when something is wrong
         unstable {
             script {
                 emailext(
@@ -84,7 +96,7 @@ pipeline {
                     body: """<html>
                         <body>
                             <h2>Pipeline Status: UNSTABLE</h2>
-                            <p><b>API Result:</b></p>
+                            <p><b>API Result (dailyApiCall):</b></p>
                             <pre>${env.API_RESULT ?: "No Data"}</pre>
                         </body>
                     </html>""",
@@ -97,7 +109,13 @@ pipeline {
         failure {
             emailext(
                 subject: "❌ Pipeline FAILED",
-                body: "Check Jenkins logs immediately.",
+                body: """<html>
+                    <body>
+                        <h2>Pipeline FAILED</h2>
+                        <p>Please check Jenkins logs immediately.</p>
+                    </body>
+                </html>""",
+                mimeType: 'text/html',
                 to: "mohamed.farahat.attia@gmail.com"
             )
         }
