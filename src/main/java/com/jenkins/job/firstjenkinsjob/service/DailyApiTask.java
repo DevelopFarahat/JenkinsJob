@@ -27,9 +27,7 @@ public class DailyApiTask implements CommandLineRunner {
 
         // Serialize to JSON string
         String json = mapper.writeValueAsString(response);
-
-        // Write JSON to file (no console output)
-        Files.writeString(Paths.get("api-result.json"), json);
+        System.out.print(json);
 
         // Exit cleanly so Jenkins knows the job finished
         System.exit(0);

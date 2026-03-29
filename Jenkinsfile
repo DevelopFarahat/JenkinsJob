@@ -1,31 +1,45 @@
 pipeline {
     agent any
+
     triggers {
-        cron('H 9 * * *') // run daily at 9 AM
+        // Run daily at 9 AM
+        cron('H 9 * * *')
     }
+
+    environment {
+        // Placeholder for API result
+        API_RESULT = ''
+    }
+
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
+
         stage('Build Application') {
             steps {
+                // Build without running tests
                 sh 'mvn clean package -DskipTests'
             }
         }
+
         stage('Run Daily API Job') {
             steps {
                 script {
-                    sh "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none"
+                    // Run Spring Boot job and capture JSON output
+                    def response = sh(
+                        script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
+                        returnStdout: true
+                    ).trim()
 
-                    // Read the JSON file created by the app
-                    def response = readFile('api-result.json').trim()
-                    env.API_RESULT = response
+                    env.API_RESULT = response ?: "No API result"
                 }
             }
         }
     }
+
     post {
         success {
             emailext(
@@ -43,6 +57,7 @@ ${env.API_RESULT}
                 to: "mohamed.farahat.attia@gmail.com"
             )
         }
+
         failure {
             emailext(
                 subject: "Daily API Report - FAILURE",
