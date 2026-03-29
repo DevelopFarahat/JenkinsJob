@@ -30,6 +30,6 @@ public class DailyApiTask implements CommandLineRunner {
         System.out.print(json);
 
         // Exit cleanly so Jenkins knows the job finished
-        System.exit(0);
+        System.out.flush();
     }
 }
