@@ -18,8 +18,7 @@ pipeline {
             steps {
                 script {
                     def response = sh(
-                        script: "java -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall",
-                        returnStdout: true
+                    script: "java -Djava.net.preferIPv4Stack=true -jar target/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",                        returnStdout: true
                     ).trim()
                     env.API_RESULT = response
                 }
