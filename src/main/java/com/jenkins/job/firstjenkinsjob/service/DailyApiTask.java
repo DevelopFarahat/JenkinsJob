@@ -32,7 +32,7 @@ public class DailyApiTask implements CommandLineRunner {
         result.add(response);
         // Serialize to JSON string
         String json = mapper.writeValueAsString(result);
-        System.out.print(json);
+        System.out.print(List.of());
 
         // Exit cleanly so Jenkins knows the job finished
         System.out.flush();
