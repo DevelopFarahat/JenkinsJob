@@ -38,10 +38,10 @@ pipeline {
                             parsed = null
                         }
 
-                        // If parsed is an empty list, mark UNSTABLE
-                        if (parsed instanceof List && parsed.isEmpty()) {
+                        // If parsed is a non-empty list, mark UNSTABLE
+                        if (parsed instanceof List && !parsed.isEmpty()) {
                             currentBuild.result = 'UNSTABLE'
-                            error("Daily API Job result list is empty → marking UNSTABLE")
+                            error("Daily API Job result list is NOT empty → marking UNSTABLE")
                         }
                     }
                 }
