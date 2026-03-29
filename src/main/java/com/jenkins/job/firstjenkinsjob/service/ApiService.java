@@ -8,7 +8,7 @@ public class ApiService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public String fetchPosts() {
-        String url = "https://jsonplaceholder.typicode.com/posts";
+        String url = "https://official-joke-api.appspot.com/random_joke";
         return restTemplate.getForObject(url, String.class);
     }
 }
