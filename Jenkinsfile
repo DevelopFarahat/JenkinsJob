@@ -1,68 +1,182 @@
-stage('Run API Jobs') {
-    steps {
-        script {
-            // Store all results in a map
-            def apiResults = [:]
+pipeline {
+    agent any
 
-            def runJob = { jobName, markUnstable = false ->
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
 
-                return {
-                    echo "========== START ${jobName} =========="
+    environment {
+        API_RESULT = ""
+    }
 
-                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+    stages {
 
-                        timeout(time: 2, unit: 'MINUTES') {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
-                            retry(2) {
-                                sleep 5
+        stage('Build & Test') {
+            steps {
+                sh 'mvn -B -T 1C clean verify'
+            }
+        }
 
-                                def response = sh(
-                                    script: "java -jar ${env.JAR_FILE} --job.name=${jobName} --spring.main.web-application-type=none",
-                                    returnStdout: true
-                                ).trim()
+        stage('Prepare') {
+            steps {
+                script {
+                    env.JAR_FILE = sh(
+                        script: "ls target/*.jar | head -n 1",
+                        returnStdout: true
+                    ).trim()
 
-                                echo "Response (${jobName}):\n${response}"
+                    echo "Using JAR: ${env.JAR_FILE}"
+                }
+            }
+        }
 
-                                // Smart JSON extraction
-                                def jsonBlock = null
-                                if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
-                                    jsonBlock = response.split("JSON_RESULT_START")[1]
-                                                       ?.split("JSON_RESULT_END")[0]
-                                                       ?.trim()
-                                } else {
-                                    def jsonLine = response.readLines().findAll {
-                                        it.trim().startsWith("{") || it.trim().startsWith("[")
-                                    }?.last()
-                                    if (jsonLine) jsonBlock = jsonLine.trim()
-                                }
+        stage('Run API Jobs') {
+            steps {
+                script {
 
-                                if (jsonBlock) {
-                                    apiResults[jobName] = jsonBlock // ✅ Store result
-                                    echo "JSON captured: ${jsonBlock}"
+                    def runJob = { jobName, markUnstable = false ->
 
-                                    if (markUnstable) {
-                                        unstable("${jobName} returned non-empty result")
+                        return {
+                            echo "========== START ${jobName} =========="
+
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+
+                                timeout(time: 2, unit: 'MINUTES') {
+
+                                    retry(2) {
+
+                                        sleep 5
+
+                                        def response = sh(
+                                            script: """
+                                                java -jar ${env.JAR_FILE} \
+                                                --job.name=${jobName} \
+                                                --spring.main.web-application-type=none
+                                            """,
+                                            returnStdout: true
+                                        ).trim()
+
+                                        echo "Response (${jobName}):\n${response}"
+
+                                        // ✅ Smart JSON extraction (markers + fallback)
+                                        def jsonBlock = null
+
+                                        if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
+
+                                            jsonBlock = response.split("JSON_RESULT_START")[1]
+                                                               ?.split("JSON_RESULT_END")[0]
+                                                               ?.trim()
+
+                                        } else {
+                                            def jsonLine = response.readLines().findAll {
+                                                it.trim().startsWith("{") || it.trim().startsWith("[")
+                                            }?.last()
+
+                                            if (jsonLine) {
+                                                jsonBlock = jsonLine.trim()
+                                                echo "Fallback JSON detected: ${jsonBlock}"
+                                            } else {
+                                                echo "No JSON detected at all"
+                                            }
+                                        }
+
+                                        def parsed = null
+
+                                        if (jsonBlock) {
+                                            try {
+                                                parsed = new groovy.json.JsonSlurper().parseText(jsonBlock)
+                                            } catch (Exception e) {
+                                                echo "JSON parse failed: ${e.message}"
+                                            }
+                                        }
+
+                                        // ✅ Mark UNSTABLE correctly
+                                        if (markUnstable && parsed && (
+                                                (parsed instanceof List && !parsed.isEmpty()) ||
+                                                (parsed instanceof Map && !parsed.isEmpty())
+                                        )) {
+                                            env.API_RESULT = parsed.toString()
+                                            unstable("${jobName} returned non-empty result")
+                                        }
                                     }
-                                } else {
-                                    apiResults[jobName] = "No JSON detected"
                                 }
                             }
+
+                            echo "========== END ${jobName} =========="
                         }
                     }
 
-                    echo "========== END ${jobName} =========="
+                    parallel(
+                        failFast: true,
+                        "dailyApiCall": runJob("dailyApiCall", true),
+                        "dailyApiCall2": runJob("dailyApiCall2"),
+                        "dailyApiCall3": runJob("dailyApiCall3")
+                    )
                 }
             }
+        }
 
-            parallel(
-                failFast: true,
-                "dailyApiCall": runJob("dailyApiCall", true),
-                "dailyApiCall2": runJob("dailyApiCall2"),
-                "dailyApiCall3": runJob("dailyApiCall3")
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+    }
+
+    post {
+
+        unstable {
+            script {
+                emailext(
+                    subject: "⚠️ Daily API Report - UNSTABLE",
+                    body: """<html>
+                        <body>
+                            <h2>Pipeline Status: UNSTABLE</h2>
+
+                            <p><b>Build URL:</b>
+                                <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
+                            </p>
+
+                            <p><b>Time:</b> ${new Date()}</p>
+
+                            <p><b>API Result (dailyApiCall):</b></p>
+                            <pre>${env.API_RESULT ?: "No Data"}</pre>
+
+                        </body>
+                    </html>""",
+                    mimeType: 'text/html',
+                    to: "mohamed.farahat.attia@gmail.com"
+                )
+            }
+        }
+
+        failure {
+            emailext(
+                subject: "❌ Pipeline FAILED",
+                body: """<html>
+                    <body>
+                        <h2>Pipeline FAILED</h2>
+
+                        <p><b>Build URL:</b>
+                            <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
+                        </p>
+
+                        <p><b>Time:</b> ${new Date()}</p>
+
+                        <p>Please check Jenkins logs immediately.</p>
+
+                    </body>
+                </html>""",
+                mimeType: 'text/html',
+                to: "mohamed.farahat.attia@gmail.com"
             )
-
-            // ✅ Expose results to environment for post section
-            env.API_RESULT = groovy.json.JsonOutput.toJson(apiResults)
         }
     }
 }
