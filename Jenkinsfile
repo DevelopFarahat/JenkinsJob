@@ -1,59 +1,68 @@
 stage('Run API Jobs') {
-    script {
-        // Map to store API results
-        def apiResults = [:]
+    steps {
+        script {
+            // Store all results in a map
+            def apiResults = [:]
 
-        // Function to run each API job
-        def runJob = { jobName, markUnstable = false ->
-            echo "========== START ${jobName} =========="
+            def runJob = { jobName, markUnstable = false ->
 
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                timeout(time: 2, unit: 'MINUTES') {
-                    retry(2) {
-                        sleep 5
+                return {
+                    echo "========== START ${jobName} =========="
 
-                        def response = sh(
-                            script: "java -jar ${env.JAR_FILE} --job.name=${jobName} --spring.main.web-application-type=none",
-                            returnStdout: true
-                        ).trim()
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
 
-                        echo "Response (${jobName}):\n${response}"
+                        timeout(time: 2, unit: 'MINUTES') {
 
-                        // Extract JSON result
-                        def jsonBlock = null
-                        if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
-                            jsonBlock = response.split("JSON_RESULT_START")[1]
-                                               ?.split("JSON_RESULT_END")[0]
-                                               ?.trim()
-                        } else {
-                            def jsonLine = response.readLines().findAll {
-                                it.trim().startsWith("{") || it.trim().startsWith("[")
-                            }?.last()
-                            if (jsonLine) jsonBlock = jsonLine.trim()
-                        }
+                            retry(2) {
+                                sleep 5
 
-                        if (jsonBlock) {
-                            apiResults[jobName] = jsonBlock
-                            echo "JSON captured: ${jsonBlock}"
-                            if (markUnstable) unstable("${jobName} returned non-empty result")
-                        } else {
-                            apiResults[jobName] = "No JSON detected"
+                                def response = sh(
+                                    script: "java -jar ${env.JAR_FILE} --job.name=${jobName} --spring.main.web-application-type=none",
+                                    returnStdout: true
+                                ).trim()
+
+                                echo "Response (${jobName}):\n${response}"
+
+                                // Smart JSON extraction
+                                def jsonBlock = null
+                                if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
+                                    jsonBlock = response.split("JSON_RESULT_START")[1]
+                                                       ?.split("JSON_RESULT_END")[0]
+                                                       ?.trim()
+                                } else {
+                                    def jsonLine = response.readLines().findAll {
+                                        it.trim().startsWith("{") || it.trim().startsWith("[")
+                                    }?.last()
+                                    if (jsonLine) jsonBlock = jsonLine.trim()
+                                }
+
+                                if (jsonBlock) {
+                                    apiResults[jobName] = jsonBlock // ✅ Store result
+                                    echo "JSON captured: ${jsonBlock}"
+
+                                    if (markUnstable) {
+                                        unstable("${jobName} returned non-empty result")
+                                    }
+                                } else {
+                                    apiResults[jobName] = "No JSON detected"
+                                }
+                            }
                         }
                     }
+
+                    echo "========== END ${jobName} =========="
                 }
             }
 
-            echo "========== END ${jobName} =========="
+            parallel(
+                failFast: true,
+                "dailyApiCall": runJob("dailyApiCall", true),
+                "dailyApiCall2": runJob("dailyApiCall2"),
+                "dailyApiCall3": runJob("dailyApiCall3")
+            )
+
+            // ✅ Expose results to environment for post section
+            env.API_RESULT = groovy.json.JsonOutput.toJson(apiResults)
         }
-
-        // Run all jobs in parallel
-        parallel(
-            "dailyApiCall": { runJob("dailyApiCall", true) },
-            "dailyApiCall2": { runJob("dailyApiCall2") },
-            "dailyApiCall3": { runJob("dailyApiCall3") }
-        )
-
-        // Expose results to post stage
-        env.API_RESULT = groovy.json.JsonOutput.toJson(apiResults)
     }
 }
