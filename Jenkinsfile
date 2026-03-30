@@ -69,7 +69,7 @@ pipeline {
                         }
 
                         // Ensure API_RESULT is never null
-                        if (!env.API_RESULT) {
+                        if (!env.API_RESULT?.trim()) {
                             env.API_RESULT = "No API result captured"
                         }
                     }
