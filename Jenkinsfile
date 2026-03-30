@@ -52,6 +52,7 @@ pipeline {
                         if (jsonLine) {
                             try {
                                 def parsed = new groovy.json.JsonSlurper().parseText(jsonLine)
+                                // Always store as string
                                 env.API_RESULT = groovy.json.JsonOutput.prettyPrint(jsonLine)
 
                                 // Mark UNSTABLE if result is NOT empty
@@ -61,12 +62,13 @@ pipeline {
                                 }
                             } catch (Exception e) {
                                 echo "JSON parse failed: ${e.message}"
-                                env.API_RESULT = jsonLine   // fallback raw JSON
+                                env.API_RESULT = jsonLine   // fallback raw JSON string
                             }
                         } else {
-                            env.API_RESULT = response     // fallback raw response
+                            env.API_RESULT = response     // fallback raw response string
                         }
 
+                        // Ensure API_RESULT is never null
                         if (!env.API_RESULT) {
                             env.API_RESULT = "No API result captured"
                         }
