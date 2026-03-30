@@ -11,7 +11,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps { checkout scm }
         }
@@ -62,10 +61,14 @@ pipeline {
                                 }
                             } catch (Exception e) {
                                 echo "JSON parse failed: ${e.message}"
-                                env.API_RESULT = jsonLine
+                                env.API_RESULT = jsonLine   // fallback raw JSON
                             }
                         } else {
-                            env.API_RESULT = response
+                            env.API_RESULT = response     // fallback raw response
+                        }
+
+                        if (!env.API_RESULT) {
+                            env.API_RESULT = "No API result captured"
                         }
                     }
                 }
@@ -93,12 +96,6 @@ pipeline {
                     ).trim()
                     echo "Response (dailyApiCall3):\n${response3}"
                 }
-            }
-        }
-
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
     }
