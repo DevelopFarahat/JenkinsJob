@@ -49,9 +49,7 @@ pipeline {
                             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
 
                                 timeout(time: 2, unit: 'MINUTES') {
-
                                     retry(2) {
-
                                         sleep 5
 
                                         def response = sh(
@@ -65,27 +63,12 @@ pipeline {
 
                                         echo "Response (${jobName}):\n${response}"
 
-                                        def jsonBlock = null
-
-                                        if (response.contains("JSON_RESULT_START") && response.contains("JSON_RESULT_END")) {
-                                            jsonBlock = response.split("JSON_RESULT_START")[1]
-                                                               ?.split("JSON_RESULT_END")[0]
-                                                               ?.trim()
-                                        } else {
-                                            def jsonLine = response.readLines().findAll {
-                                                it.trim().startsWith("{") || it.trim().startsWith("[")
-                                            }?.last()
-
-                                            if (jsonLine) {
-                                                jsonBlock = jsonLine.trim()
-                                                echo "Fallback JSON detected: ${jsonBlock}"
-                                            } else {
-                                                echo "No JSON detected at all"
-                                            }
-                                        }
+                                        // Extract JSON block
+                                        def jsonBlock = response.readLines().findAll {
+                                            it.trim().startsWith("{") || it.trim().startsWith("[")
+                                        }?.last()
 
                                         def parsed = null
-
                                         if (jsonBlock) {
                                             try {
                                                 parsed = new groovy.json.JsonSlurper().parseText(jsonBlock)
@@ -98,6 +81,7 @@ pipeline {
                                             env.API_RESULT = response       // fallback raw response
                                         }
 
+                                        // Mark UNSTABLE if result is NOT empty
                                         if (markUnstable && parsed && (
                                                 (parsed instanceof List && !parsed.isEmpty()) ||
                                                 (parsed instanceof Map && !parsed.isEmpty())
