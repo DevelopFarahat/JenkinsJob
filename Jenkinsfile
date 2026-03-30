@@ -13,9 +13,7 @@ pipeline {
     stages {
 
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
         stage('Build & Test') {
@@ -31,77 +29,69 @@ pipeline {
                         script: "ls target/*.jar | head -n 1",
                         returnStdout: true
                     ).trim()
-
                     echo "Using JAR: ${env.JAR_FILE}"
                 }
             }
         }
 
-        stage('Run API Jobs') {
+        stage('Run Daily API Job') {
             steps {
                 script {
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        def response = sh(
+                            script: "java -jar ${env.JAR_FILE} --job.name=dailyApiCall --spring.main.web-application-type=none",
+                            returnStdout: true
+                        ).trim()
 
-                    def runJob = { jobName, markUnstable = false ->
+                        echo "Response (dailyApiCall):\n${response}"
 
-                        return {
-                            echo "========== START ${jobName} =========="
+                        // Extract JSON line (last line with { or [)
+                        def jsonLine = response.readLines().findAll {
+                            it.trim().startsWith("{") || it.trim().startsWith("[")
+                        }?.last()
 
-                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        if (jsonLine) {
+                            try {
+                                def parsed = new groovy.json.JsonSlurper().parseText(jsonLine)
+                                env.API_RESULT = groovy.json.JsonOutput.prettyPrint(jsonLine)
 
-                                timeout(time: 2, unit: 'MINUTES') {
-                                    retry(2) {
-                                        sleep 5
-
-                                        def response = sh(
-                                            script: """
-                                                java -jar ${env.JAR_FILE} \
-                                                --job.name=${jobName} \
-                                                --spring.main.web-application-type=none
-                                            """,
-                                            returnStdout: true
-                                        ).trim()
-
-                                        echo "Response (${jobName}):\n${response}"
-
-                                        // Extract JSON block
-                                        def jsonBlock = response.readLines().findAll {
-                                            it.trim().startsWith("{") || it.trim().startsWith("[")
-                                        }?.last()
-
-                                        def parsed = null
-                                        if (jsonBlock) {
-                                            try {
-                                                parsed = new groovy.json.JsonSlurper().parseText(jsonBlock)
-                                                env.API_RESULT = groovy.json.JsonOutput.prettyPrint(jsonBlock)
-                                            } catch (Exception e) {
-                                                echo "JSON parse failed: ${e.message}"
-                                                env.API_RESULT = jsonBlock   // fallback raw JSON
-                                            }
-                                        } else {
-                                            env.API_RESULT = response       // fallback raw response
-                                        }
-
-                                        // Mark UNSTABLE if result is NOT empty
-                                        if (markUnstable && parsed && (
-                                                (parsed instanceof List && !parsed.isEmpty()) ||
-                                                (parsed instanceof Map && !parsed.isEmpty())
-                                        )) {
-                                            unstable("${jobName} returned non-empty result")
-                                        }
-                                    }
+                                // Mark UNSTABLE if result is NOT empty
+                                if ((parsed instanceof List && !parsed.isEmpty()) ||
+                                    (parsed instanceof Map && !parsed.isEmpty())) {
+                                    unstable("dailyApiCall returned non-empty result")
                                 }
+                            } catch (Exception e) {
+                                echo "JSON parse failed: ${e.message}"
+                                env.API_RESULT = jsonLine
                             }
-
-                            echo "========== END ${jobName} =========="
+                        } else {
+                            env.API_RESULT = response
                         }
                     }
+                }
+            }
+        }
 
-                    parallel(
-                        failFast: true,
-                        "dailyApiCall": runJob("dailyApiCall", true),
-                        "dailyApiCall2": runJob("dailyApiCall2"),
-                        "dailyApiCall3": runJob("dailyApiCall3")
-                    )
+        stage('Run Daily API Job 2') {
+            steps {
+                script {
+                    def response2 = sh(
+                        script: "java -jar ${env.JAR_FILE} --job.name=dailyApiCall2 --spring.main.web-application-type=none",
+                        returnStdout: true
+                    ).trim()
+                    echo "Response (dailyApiCall2):\n${response2}"
+                }
+            }
+        }
+
+        stage('Run Daily API Job 3') {
+            steps {
+                script {
+                    def response3 = sh(
+                        script: "java -jar ${env.JAR_FILE} --job.name=dailyApiCall3 --spring.main.web-application-type=none",
+                        returnStdout: true
+                    ).trim()
+                    echo "Response (dailyApiCall3):\n${response3}"
                 }
             }
         }
@@ -114,7 +104,6 @@ pipeline {
     }
 
     post {
-
         unstable {
             script {
                 emailext(
@@ -122,16 +111,12 @@ pipeline {
                     body: """<html>
                         <body>
                             <h2>Pipeline Status: UNSTABLE</h2>
-
                             <p><b>Build URL:</b>
                                 <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
                             </p>
-
                             <p><b>Time:</b> ${new Date()}</p>
-
                             <p><b>API Result (dailyApiCall):</b></p>
                             <pre>${env.API_RESULT}</pre>
-
                         </body>
                     </html>""",
                     mimeType: 'text/html',
@@ -146,15 +131,11 @@ pipeline {
                 body: """<html>
                     <body>
                         <h2>Pipeline FAILED</h2>
-
                         <p><b>Build URL:</b>
                             <a href="${env.BUILD_URL}">${env.BUILD_URL}</a>
                         </p>
-
                         <p><b>Time:</b> ${new Date()}</p>
-
                         <p>Please check Jenkins logs immediately.</p>
-
                     </body>
                 </html>""",
                 mimeType: 'text/html',
