@@ -7,8 +7,19 @@ pipelineJob('Daily-API-Job-1') {
                 pipeline {
                     agent any
                     stages {
-                        stage('Checkout') { steps { checkout scm } }
-                        stage('Build & Test') { steps { sh './gradlew clean build test' } }
+                        stage('Checkout') {
+                            steps {
+                                git branch: 'main',
+                                    url: 'https://github.com/DevelopFarahat/FirstJenkinsJob.git'
+                            }
+                        }
+
+                        stage('Build & Test') {
+                            steps {
+                                sh './gradlew clean build test'
+                            }
+                        }
+
                         stage('Run Daily API Job') {
                             steps {
                                 script {
@@ -19,10 +30,17 @@ pipelineJob('Daily-API-Job-1') {
                                             returnStdout: true
                                         ).trim()
                                         echo "Daily API Call raw output:\\n\${response}"
+
                                         def lastLine = response.readLines().last()
                                         env.API_RESULT = lastLine ?: "No API result"
+
                                         def parsed
-                                        try { parsed = new groovy.json.JsonSlurper().parseText(lastLine) } catch (Exception e) { parsed = null }
+                                        try {
+                                            parsed = new groovy.json.JsonSlurper().parseText(lastLine)
+                                        } catch (Exception e) {
+                                            parsed = null
+                                        }
+
                                         if (parsed instanceof List && !parsed.isEmpty()) {
                                             currentBuild.result = 'UNSTABLE'
                                             error("Daily API Job result list is NOT empty → marking UNSTABLE")
@@ -32,6 +50,7 @@ pipelineJob('Daily-API-Job-1') {
                             }
                         }
                     }
+
                     post {
                         always {
                             script {
