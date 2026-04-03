@@ -7,8 +7,11 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
         stage('Build & Test') {
@@ -20,16 +23,21 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
-                    // ✅ Properly quoted find command
+                    echo "Listing JAR files..."
+                    sh "ls -lh build/libs/"
+
+                    // ✅ More reliable than find
                     env.JAR_FILE = sh(
-                        script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
+                        script: "ls build/libs/*.jar | grep -v 'plain' | head -n 1",
                         returnStdout: true
                     ).trim()
 
-                    echo "Using JAR: ${env.JAR_FILE}"
+                    echo "Detected JAR: ${env.JAR_FILE}"
 
-                    // Debug: show all JARs produced
-                    sh "ls -lh build/libs/"
+                    // ❌ Fail early if not found
+                    if (!env.JAR_FILE) {
+                        error("❌ No executable JAR found in build/libs/")
+                    }
                 }
             }
         }
@@ -38,8 +46,9 @@ pipeline {
             steps {
                 script {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+
                         def response = sh(
-                            script: "java -jar ${env.JAR_FILE} --job.name=dailyApiCall --spring.main.web-application-type=none",
+                            script: "java -jar '${env.JAR_FILE}' --job.name=dailyApiCall --spring.main.web-application-type=none",
                             returnStdout: true
                         ).trim()
 
@@ -56,8 +65,9 @@ pipeline {
 
                                 if (parsed instanceof List && !parsed.isEmpty()) {
                                     currentBuild.result = 'UNSTABLE'
-                                    echo "dailyApiCall returned non-empty list → marking UNSTABLE"
+                                    echo "⚠️ dailyApiCall returned non-empty list → marking UNSTABLE"
                                 }
+
                             } catch (Exception e) {
                                 echo "JSON parse failed: ${e.message}"
                                 env.API_RESULT = jsonLine
@@ -78,9 +88,10 @@ pipeline {
             steps {
                 script {
                     def response2 = sh(
-                        script: "java -jar ${env.JAR_FILE} --job.name=dailyApiCall2 --spring.main.web-application-type=none",
+                        script: "java -jar '${env.JAR_FILE}' --job.name=dailyApiCall2 --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
+
                     echo "Response (dailyApiCall2):\n${response2}"
                 }
             }
@@ -90,9 +101,10 @@ pipeline {
             steps {
                 script {
                     def response3 = sh(
-                        script: "java -jar ${env.JAR_FILE} --job.name=dailyApiCall3 --spring.main.web-application-type=none",
+                        script: "java -jar '${env.JAR_FILE}' --job.name=dailyApiCall3 --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
+
                     echo "Response (dailyApiCall3):\n${response3}"
                 }
             }
@@ -100,6 +112,7 @@ pipeline {
     }
 
     post {
+
         unstable {
             script {
                 emailext(
@@ -123,7 +136,7 @@ pipeline {
                 body: """<html>
                     <body>
                         <h2>Pipeline FAILED</h2>
-                        <p>Please check Jenkins logs immediately.</p>
+                        <p>Check Jenkins logs immediately.</p>
                     </body>
                 </html>""",
                 mimeType: 'text/html',
