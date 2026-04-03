@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        JAR_FILE = ""
+        JAR_FILE = "build/libs/jenkins_job-0.0.1-SNAPSHOT.jar"
         API_RESULT = ""
     }
 
@@ -20,28 +20,17 @@ pipeline {
             }
         }
 
-        stage('Prepare') {
+        stage('Verify JAR') {
             steps {
                 script {
-                    echo "Listing JAR files..."
+                    echo "Checking JAR file..."
                     sh "ls -lh build/libs/"
 
-                    // ✅ Get all jar files (no pipes)
-                    def jars = sh(
-                        script: "ls build/libs/*.jar",
-                        returnStdout: true
-                    ).trim().split("\n")
-
-                    // ✅ Filter in Groovy (SAFE)
-                    def filtered = jars.findAll { !it.contains("plain") }
-
-                    if (filtered.isEmpty()) {
-                        error("❌ No executable JAR found in build/libs/")
+                    if (!fileExists(env.JAR_FILE)) {
+                        error("❌ JAR file not found: ${env.JAR_FILE}")
                     }
 
-                    env.JAR_FILE = filtered[0]
-
-                    echo "✅ Selected JAR: ${env.JAR_FILE}"
+                    echo "✅ Using JAR: ${env.JAR_FILE}"
                 }
             }
         }
@@ -124,6 +113,7 @@ pipeline {
                     body: """<html>
                         <body>
                             <h2>Pipeline Status: UNSTABLE</h2>
+                            <p><b>API Result (dailyApiCall):</b></p>
                             <pre>${env.API_RESULT}</pre>
                         </body>
                     </html>""",
