@@ -5,7 +5,7 @@ job('seed-job') {
     scm {
         git {
             remote {
-                url('https://github.com/DevelopFarahat/JenkinsJob.git')
+                url('https://github.com/DevelopFarahat/JenkinsJob')
             }
             branch('main')
         }

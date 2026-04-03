@@ -10,7 +10,7 @@ pipelineJob('Daily-API-Job-1') {
                         stage('Checkout') {
                             steps {
                                 git branch: 'main',
-                                    url: 'https://github.com/DevelopFarahat/FirstJenkinsJob.git',
+                                    url: 'https://github.com/DevelopFarahat/JenkinsJob',
                                     credentialsId: '530aa68b-e8a0-44fc-9479-1a87b1bafb08'
                             }
                         }
