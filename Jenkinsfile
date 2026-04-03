@@ -103,7 +103,7 @@ Build Status: ${currentBuild.currentResult}
 API Result (dailyApiCall):
 ${env.API_RESULT}
 """,
-                    to: 'your-email@example.com'
+                    to: 'mohamed.farahat.attia@gmail.com'
                 )
             }
         }
