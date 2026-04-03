@@ -17,8 +17,8 @@ job('seed-job') {
 
     steps {
         dsl {
-            // Scan all groovy files under jobs/ directory
-            external('jobs/*.groovy')
+            // Scan all groovy files under jenkins-dsl/jobs/ directory
+            external('jenkins-dsl/jobs/*.groovy')
             removeAction('DELETE')   // delete jobs not in DSL
             ignoreExisting(false)
         }
