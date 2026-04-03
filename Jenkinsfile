@@ -13,7 +13,6 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                // ✅ Use Gradle wrapper instead of Maven
                 sh './gradlew clean build'
             }
         }
@@ -22,7 +21,7 @@ pipeline {
             steps {
                 script {
                     env.JAR_FILE = sh(
-                        script: "ls build/libs/*.jar | head -n 1",
+                        script: "ls build/libs/*-SNAPSHOT.jar | grep -v plain | head -n 1",
                         returnStdout: true
                     ).trim()
                     echo "Using JAR: ${env.JAR_FILE}"
@@ -50,7 +49,6 @@ pipeline {
                                 def parsed = new groovy.json.JsonSlurper().parseText(jsonLine)
                                 env.API_RESULT = groovy.json.JsonOutput.prettyPrint(jsonLine)
 
-                                // ✅ Assign API_RESULT first, then mark UNSTABLE
                                 if (parsed instanceof List && !parsed.isEmpty()) {
                                     currentBuild.result = 'UNSTABLE'
                                     echo "dailyApiCall returned non-empty list → marking UNSTABLE"
