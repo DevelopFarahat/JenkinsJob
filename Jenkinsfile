@@ -2,9 +2,7 @@ pipeline {
     agent any
 
     environment {
-        API_RESULT1 = ""
-        API_RESULT2 = ""
-        API_RESULT3 = ""
+        API_RESULT = ""
     }
 
     stages {
@@ -33,59 +31,31 @@ pipeline {
             }
         }
 
-        stage('Run Daily API Job 1') {
+        stage('Run Daily API Job') {
             steps {
                 script {
+                    // Allow stage to fail but continue pipeline
                     catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                         def output = sh(
                             script: 'java -jar build/libs/jenkins_job-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none',
                             returnStdout: true
                         ).trim()
 
-                        echo "Full Output (Job1):\n${output}"
+                        echo "Full Output:\n${output}"
 
+                        // Extract JSON line (last line that looks like JSON)
                         def jsonLine = output.readLines().reverse().find { it.trim().startsWith('[') || it.trim().startsWith('{') }
-                        echo "Extracted JSON (Job1):\n${jsonLine}"
+                        echo "Extracted JSON:\n${jsonLine}"
 
-                        env.API_RESULT1 = (jsonLine ?: "EMPTY").toString()
+                        // Force string assignment
+                        env.API_RESULT = (jsonLine ?: "EMPTY").toString()
 
+                        // Mark build UNSTABLE if result is not empty array/object
                         if (jsonLine && jsonLine != "[]" && jsonLine != "{}") {
                             currentBuild.result = 'UNSTABLE'
-                            echo "⚠️ Build marked as UNSTABLE بسبب وجود بيانات في API (Job1)"
+                            echo "⚠️ Build marked as UNSTABLE بسبب وجود بيانات في API"
                         }
                     }
-                }
-            }
-        }
-
-        stage('Run Daily API Job 2') {
-            steps {
-                script {
-                    def output2 = sh(
-                        script: 'java -jar build/libs/jenkins_job-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall2 --spring.main.web-application-type=none',
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Full Output (Job2):\n${output2}"
-
-                    def jsonLine2 = output2.readLines().reverse().find { it.trim().startsWith('[') || it.trim().startsWith('{') }
-                    env.API_RESULT2 = (jsonLine2 ?: "EMPTY").toString()
-                }
-            }
-        }
-
-        stage('Run Daily API Job 3') {
-            steps {
-                script {
-                    def output3 = sh(
-                        script: 'java -jar build/libs/jenkins_job-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall3 --spring.main.web-application-type=none',
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Full Output (Job3):\n${output3}"
-
-                    def jsonLine3 = output3.readLines().reverse().find { it.trim().startsWith('[') || it.trim().startsWith('{') }
-                    env.API_RESULT3 = (jsonLine3 ?: "EMPTY").toString()
                 }
             }
         }
@@ -94,15 +64,13 @@ pipeline {
     post {
         always {
             script {
+                def apiResultForEmail = env.API_RESULT ?: "EMPTY"
+
                 def emailBody = """<html>
                     <body>
                         <h2>Pipeline Status: ${currentBuild.currentResult}</h2>
                         <p><b>API Result (dailyApiCall):</b></p>
-                        <pre>${env.API_RESULT1}</pre>
-                        <p><b>API Result (dailyApiCall2):</b></p>
-                        <pre>${env.API_RESULT2}</pre>
-                        <p><b>API Result (dailyApiCall3):</b></p>
-                        <pre>${env.API_RESULT3}</pre>
+                        <pre>${apiResultForEmail}</pre>
                     </body>
                 </html>"""
 
