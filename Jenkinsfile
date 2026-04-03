@@ -6,7 +6,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -38,7 +37,6 @@ pipeline {
             steps {
                 script {
                     catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-
                         def output = sh(
                             script: 'java -jar build/libs/jenkins_job-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none',
                             returnStdout: true
@@ -46,14 +44,11 @@ pipeline {
 
                         echo "Full Output:\n${output}"
 
-                        // Extract only JSON line (ignore Spring logs)
                         def jsonLine = output.readLines().find { it.startsWith('[') || it.startsWith('{') }
-
                         echo "Extracted JSON:\n${jsonLine}"
 
                         env.API_RESULT = jsonLine ?: "EMPTY"
 
-                        // If API returned data → mark UNSTABLE
                         if (jsonLine && jsonLine != "[]" && jsonLine != "{}") {
                             currentBuild.result = 'UNSTABLE'
                             echo "⚠️ Build marked as UNSTABLE بسبب وجود بيانات في API"
@@ -70,7 +65,6 @@ pipeline {
                         script: 'java -jar build/libs/jenkins_job-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall2 --spring.main.web-application-type=none',
                         returnStdout: true
                     ).trim()
-
                     echo "Response (dailyApiCall2):\n${output}"
                 }
             }
@@ -83,7 +77,6 @@ pipeline {
                         script: 'java -jar build/libs/jenkins_job-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall3 --spring.main.web-application-type=none',
                         returnStdout: true
                     ).trim()
-
                     echo "Response (dailyApiCall3):\n${output}"
                 }
             }
@@ -95,14 +88,17 @@ pipeline {
             script {
                 echo "Final API_RESULT: ${env.API_RESULT}"
 
+                def emailBody = """Build Status: ${currentBuild.currentResult}\n"""
+
+                if (currentBuild.result == 'UNSTABLE') {
+                    emailBody += "\nAPI Result (dailyApiCall):\n${env.API_RESULT}\n"
+                } else {
+                    emailBody += "\nNo API data returned or build stable.\n"
+                }
+
                 emailext(
                     subject: "Pipeline Status: ${currentBuild.currentResult}",
-                    body: """
-Build Status: ${currentBuild.currentResult}
-
-API Result (dailyApiCall):
-${env.API_RESULT}
-""",
+                    body: emailBody,
                     to: 'mohamed.farahat.attia@gmail.com'
                 )
             }
