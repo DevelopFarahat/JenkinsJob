@@ -7,9 +7,7 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
         stage('Build & Test') {
@@ -88,17 +86,28 @@ pipeline {
             script {
                 echo "Final API_RESULT: ${env.API_RESULT}"
 
-                def emailBody = """Build Status: ${currentBuild.currentResult}\n"""
+                def emailBody = """<html>
+                    <body>
+                        <h2>Pipeline Status: ${currentBuild.currentResult}</h2>
+                """
 
                 if (currentBuild.result == 'UNSTABLE') {
-                    emailBody += "\nAPI Result (dailyApiCall):\n${env.API_RESULT}\n"
+                    emailBody += """
+                        <p><b>API Result (dailyApiCall):</b></p>
+                        <pre>${env.API_RESULT}</pre>
+                    """
                 } else {
-                    emailBody += "\nNo API data returned or build stable.\n"
+                    emailBody += """
+                        <p>No API data returned or build stable.</p>
+                    """
                 }
+
+                emailBody += "</body></html>"
 
                 emailext(
                     subject: "Pipeline Status: ${currentBuild.currentResult}",
                     body: emailBody,
+                    mimeType: 'text/html',
                     to: 'mohamed.farahat.attia@gmail.com'
                 )
             }
