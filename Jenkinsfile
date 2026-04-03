@@ -26,18 +26,22 @@ pipeline {
                     echo "Listing JAR files..."
                     sh "ls -lh build/libs/"
 
-                    // ✅ More reliable than find
-                    env.JAR_FILE = sh(
-                        script: "ls build/libs/*.jar | grep -v 'plain' | head -n 1",
+                    // ✅ Get all jar files (no pipes)
+                    def jars = sh(
+                        script: "ls build/libs/*.jar",
                         returnStdout: true
-                    ).trim()
+                    ).trim().split("\n")
 
-                    echo "Detected JAR: ${env.JAR_FILE}"
+                    // ✅ Filter in Groovy (SAFE)
+                    def filtered = jars.findAll { !it.contains("plain") }
 
-                    // ❌ Fail early if not found
-                    if (!env.JAR_FILE) {
+                    if (filtered.isEmpty()) {
                         error("❌ No executable JAR found in build/libs/")
                     }
+
+                    env.JAR_FILE = filtered[0]
+
+                    echo "✅ Selected JAR: ${env.JAR_FILE}"
                 }
             }
         }
@@ -65,7 +69,7 @@ pipeline {
 
                                 if (parsed instanceof List && !parsed.isEmpty()) {
                                     currentBuild.result = 'UNSTABLE'
-                                    echo "⚠️ dailyApiCall returned non-empty list → marking UNSTABLE"
+                                    echo "⚠️ dailyApiCall returned non-empty list → UNSTABLE"
                                 }
 
                             } catch (Exception e) {
@@ -120,7 +124,6 @@ pipeline {
                     body: """<html>
                         <body>
                             <h2>Pipeline Status: UNSTABLE</h2>
-                            <p><b>API Result (dailyApiCall):</b></p>
                             <pre>${env.API_RESULT}</pre>
                         </body>
                     </html>""",
