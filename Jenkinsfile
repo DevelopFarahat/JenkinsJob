@@ -3,12 +3,14 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
         stage('Build & Test') {
             steps {
-                // This is the release gating stage
+                // Run Gradle build and tests
                 sh './gradlew clean build test'
             }
         }
@@ -18,8 +20,9 @@ pipeline {
                 script {
                     // Wrap in catchError so the stage can fail but pipeline continues
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        def jarFile = "build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar"
                         def response = sh(
-                            script: "java -jar build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall --spring.main.web-application-type=none",
+                            script: "java -jar ${jarFile} --job.name=dailyApiCall --spring.main.web-application-type=none",
                             returnStdout: true
                         ).trim()
 
@@ -51,8 +54,9 @@ pipeline {
         stage('Run Daily API Job 2') {
             steps {
                 script {
+                    def jarFile = "build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar"
                     def response2 = sh(
-                        script: "java -jar build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall2 --spring.main.web-application-type=none",
+                        script: "java -jar ${jarFile} --job.name=dailyApiCall2 --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
                     echo "Daily API Call 2 response:\n${response2}"
@@ -63,8 +67,9 @@ pipeline {
         stage('Run Daily API Job 3') {
             steps {
                 script {
+                    def jarFile = "build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar"
                     def response3 = sh(
-                        script: "java -jar build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar --job.name=dailyApiCall3 --spring.main.web-application-type=none",
+                        script: "java -jar ${jarFile} --job.name=dailyApiCall3 --spring.main.web-application-type=none",
                         returnStdout: true
                     ).trim()
                     echo "Daily API Call 3 response:\n${response3}"

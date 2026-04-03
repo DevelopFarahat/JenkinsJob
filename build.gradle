@@ -27,3 +27,6 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+bootJar {
+    archiveFileName = 'FirstJenkinsJob-0.0.1-SNAPSHOT.jar'
+}
