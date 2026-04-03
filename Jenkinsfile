@@ -20,7 +20,7 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
-                    // ✅ Select the fat JAR explicitly
+                    // ✅ Properly quoted find command
                     env.JAR_FILE = sh(
                         script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
                         returnStdout: true
