@@ -45,20 +45,26 @@ pipeline {
                             returnStdout: true
                         ).trim()
 
-                        echo "Response (dailyApiCall):\n${response}"
+                        echo "Full Response:\n${response}"
 
-                        def jsonLine = response.readLines().findAll {
+                        // ✅ Extract JSON safely
+                        def jsonLine = response.readLines().find {
                             it.trim().startsWith("{") || it.trim().startsWith("[")
-                        }?.last()
+                        }
 
                         if (jsonLine) {
                             try {
                                 def parsed = new groovy.json.JsonSlurper().parseText(jsonLine)
-                                env.API_RESULT = groovy.json.JsonOutput.prettyPrint(jsonLine)
 
+                                // ✅ ALWAYS store as string
+                                env.API_RESULT = groovy.json.JsonOutput.prettyPrint(
+                                    groovy.json.JsonOutput.toJson(parsed)
+                                )
+
+                                // ✅ Mark UNSTABLE if list not empty
                                 if (parsed instanceof List && !parsed.isEmpty()) {
                                     currentBuild.result = 'UNSTABLE'
-                                    echo "⚠️ dailyApiCall returned non-empty list → UNSTABLE"
+                                    echo "⚠️ API returned non-empty list → UNSTABLE"
                                 }
 
                             } catch (Exception e) {
@@ -66,12 +72,15 @@ pipeline {
                                 env.API_RESULT = jsonLine
                             }
                         } else {
-                            env.API_RESULT = response
+                            env.API_RESULT = response ?: "No output returned"
                         }
 
+                        // ✅ Ensure not null
                         if (!env.API_RESULT?.trim()) {
                             env.API_RESULT = "No API result captured"
                         }
+
+                        echo "Final API_RESULT:\n${env.API_RESULT}"
                     }
                 }
             }
@@ -114,7 +123,7 @@ pipeline {
                         <body>
                             <h2>Pipeline Status: UNSTABLE</h2>
                             <p><b>API Result (dailyApiCall):</b></p>
-                            <pre>${env.API_RESULT}</pre>
+                            <pre>${env.API_RESULT ?: "EMPTY"}</pre>
                         </body>
                     </html>""",
                     mimeType: 'text/html',
