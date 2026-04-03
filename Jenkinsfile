@@ -13,7 +13,6 @@ pipeline {
 
         stage('Build & Test') {
             steps {
-                // ✅ Use Gradle wrapper instead of Maven
                 sh './gradlew clean build'
             }
         }
@@ -21,9 +20,9 @@ pipeline {
         stage('Prepare') {
             steps {
                 script {
-                    // ✅ Pick the fat JAR, exclude the plain one
+                    // ✅ Select the fat JAR explicitly
                     env.JAR_FILE = sh(
-                        script: "ls build/libs/*.jar | grep -v plain | head -n 1",
+                        script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
                         returnStdout: true
                     ).trim()
 
