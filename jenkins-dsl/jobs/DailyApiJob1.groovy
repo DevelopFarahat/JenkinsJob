@@ -24,9 +24,9 @@ pipeline {
             steps {
                 script {
                     sh './gradlew dailyApiCall'
-
-                    if (fileExists('build/api-result.txt')) {
-                        def response = readFile('build/api-result.txt').trim()
+                    junit 'build/test-results/DailyApiTaskTest.xml'
+                    if (fileExists('build/test-results/DailyApiTaskTest.xml)) {
+                        def response = readFile('build/test-results/DailyApiTaskTest.xml').trim()
                         env.API_RESULT = response
 
                         if (!response || response == 'null') {
