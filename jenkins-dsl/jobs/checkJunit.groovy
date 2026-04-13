@@ -1,35 +1,46 @@
-pipeline {
-    agent any
+pipelineJob('checkJunit') {
+    description('Run Gradle JUnit tests and publish results')
 
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main',
-                        url: 'https://github.com/DevelopFarahat/JenkinsJob',
-                        credentialsId: '530aa68b-e8a0-44fc-9479-1a87b1bafb08'
-            }
-        }
+    definition {
+        cps {
+            script("""
+                pipeline {
+                    agent any
 
-        stage('Build & Test') {
-            steps {
-                sh './gradlew clean test'
-            }
-        }
+                    stages {
+                        stage('Checkout') {
+                            steps {
+                                git branch: 'main',
+                                    url: 'https://github.com/DevelopFarahat/JenkinsJob',
+                                    credentialsId: '530aa68b-e8a0-44fc-9479-1a87b1bafb08'
+                            }
+                        }
 
-        stage('Publish Results') {
-            steps {
-                junit '**/build/test-results/test/*.xml'
-                archiveArtifacts artifacts: '**/build/reports/tests/test/index.html', fingerprint: true
-            }
-        }
-    }
+                        stage('Build & Test') {
+                            steps {
+                                sh './gradlew clean test'
+                            }
+                        }
 
-    post {
-        always {
-            echo 'Pipeline finished — results archived.'
-        }
-        failure {
-            echo 'Pipeline failed — check test reports.'
+                        stage('Publish Results') {
+                            steps {
+                                junit '**/build/test-results/test/*.xml'
+                                archiveArtifacts artifacts: '**/build/reports/tests/test/index.html', fingerprint: true
+                            }
+                        }
+                    }
+
+                    post {
+                        always {
+                            echo 'Pipeline finished — results archived.'
+                        }
+                        failure {
+                            echo 'Pipeline failed — check test reports.'
+                        }
+                    }
+                }
+            """.stripIndent())
+            sandbox()
         }
     }
 }
