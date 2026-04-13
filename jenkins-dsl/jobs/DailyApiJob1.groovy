@@ -23,15 +23,18 @@ pipeline {
         stage('Run Daily API Job') {
             steps {
                 script {
+                    // Run the Gradle task that generates the JUnit XML
                     sh './gradlew dailyApiCall'
-                    junit 'build/test-results/DailyApiTaskTest.xml'
+
+                    // Parse the JUnit XML and fail the build if it contains failures
+                    junit testResults: 'build/test-results/DailyApiTaskTest.xml',
+                          allowEmptyResults: false,
+                          skipMarkingBuildUnstable: true
+
+                    // Capture the raw XML content for email
                     if (fileExists('build/test-results/DailyApiTaskTest.xml')) {
                         def response = readFile('build/test-results/DailyApiTaskTest.xml').trim()
                         env.API_RESULT = response
-
-                        if (!response || response == 'null') {
-                            error("API returned empty or null response")
-                        }
                     } else {
                         error("API result file not found")
                     }
@@ -46,8 +49,9 @@ pipeline {
                 subject: "Daily API Job FAILED - ${currentBuild.result}",
                 body: """<html><body>
 <h2>Daily API Job FAILED</h2>
-<p>Result array:</p>
+<p>Result array / JUnit report:</p>
 <pre>${env.API_RESULT}</pre>
+<p>See Jenkins JUnit report for full details.</p>
 </body></html>""",
                 mimeType: 'text/html',
                 to: "mohamed.farahat.attia@gmail.com"
