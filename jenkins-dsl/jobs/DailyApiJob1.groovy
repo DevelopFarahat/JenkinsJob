@@ -26,10 +26,13 @@ pipeline {
                     // Run the Gradle task that generates the JUnit XML
                     sh './gradlew dailyApiCall'
 
-                    // Wrap junit so failures escalate to FAILURE
-                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                        junit testResults: 'build/test-results/DailyApiTaskTest.xml',
-                              allowEmptyResults: false
+                    // Record test results (will mark UNSTABLE if failures exist)
+                    junit testResults: 'build/test-results/DailyApiTaskTest.xml',
+                          allowEmptyResults: false
+
+                    // Escalate UNSTABLE → FAILURE
+                    if (currentBuild.result == 'UNSTABLE') {
+                        error("JUnit report contains failures → marking build as FAILED")
                     }
 
                     // Capture the raw XML content for email
