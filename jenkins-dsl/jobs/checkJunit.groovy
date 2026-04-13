@@ -6,7 +6,6 @@ pipelineJob('checkJunit') {
             script("""
                 pipeline {
                     agent any
-
                     stages {
                         stage('Checkout') {
                             steps {
@@ -32,10 +31,10 @@ pipelineJob('checkJunit') {
 
                     post {
                         always {
-                            echo 'Pipeline finished — results archived.'
+                            echo "Pipeline finished — results archived."
                         }
                         failure {
-                            echo 'Pipeline failed — check test reports.'
+                            echo "Pipeline failed — check test reports."
                         }
                     }
                 }
