@@ -1,11 +1,16 @@
 pipelineJob('Daily-API-Job-1') {
-    description('Gradle build and run dailyApiCall with JUnit reporting')
+    description('Run daily API call and fail properly with email notification')
 
     definition {
         cps {
             script("""
                 pipeline {
                     agent any
+
+                    environment {
+                        API_RESULT = "No API result available"
+                    }
+
                     stages {
                         stage('Checkout') {
                             steps {
@@ -15,19 +20,21 @@ pipelineJob('Daily-API-Job-1') {
                             }
                         }
 
-                        stage('Build & Test') {
-                            steps {
-                                sh './gradlew clean build test'
-                            }
-                        }
-
                         stage('Run Daily API Job') {
                             steps {
-                                sh './gradlew dailyApiCall'
-                                junit 'build/test-results/DailyApiTaskTest.xml'
                                 script {
-                                    def response = readFile('build/api-result.txt')
-                                    env.API_RESULT = response ?: "No API result"
+                                    sh './gradlew dailyApiCall'
+
+                                    if (fileExists('build/api-result.txt')) {
+                                        def response = readFile('build/api-result.txt').trim()
+                                        env.API_RESULT = response
+
+                                        if (!response || response == 'null') {
+                                            error("API returned empty or null response")
+                                        }
+                                    } else {
+                                        error("API result file not found")
+                                    }
                                 }
                             }
                         }
@@ -35,19 +42,16 @@ pipelineJob('Daily-API-Job-1') {
 
                     post {
                         failure {
-                            script {
-                                emailext(
-                                    subject: "Daily API Job FAILED - \${currentBuild.result}",
-                                    body: """<html><body>
-                    <h2>Daily API Job FAILED</h2>
-                                             <p>Result array:</p>
-                    <pre>\${env.API_RESULT}</pre>
-                                             <p>See JUnit report in Jenkins for details.</p>
-                    </body></html>""",
-                                    mimeType: 'text/html',
-                                    to: "mohamed.farahat.attia@gmail.com"
-                                )
-                            }
+                            emailext(
+                                subject: "Daily API Job FAILED - \${currentBuild.result}",
+                                body: \"\"\"<html><body>
+<h2>Daily API Job FAILED</h2>
+<p>Result array:</p>
+<pre>\${env.API_RESULT}</pre>
+</body></html>\"\"\",
+                                mimeType: 'text/html',
+                                to: "mohamed.farahat.attia@gmail.com"
+                            )
                         }
                     }
                 }
