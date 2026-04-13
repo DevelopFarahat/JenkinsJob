@@ -25,7 +25,7 @@ pipeline {
                 script {
                     sh './gradlew dailyApiCall'
                     junit 'build/test-results/DailyApiTaskTest.xml'
-                    if (fileExists('build/test-results/DailyApiTaskTest.xml)) {
+                    if (fileExists('build/test-results/DailyApiTaskTest.xml')) {
                         def response = readFile('build/test-results/DailyApiTaskTest.xml').trim()
                         env.API_RESULT = response
 
