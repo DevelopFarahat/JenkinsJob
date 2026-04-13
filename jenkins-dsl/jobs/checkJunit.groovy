@@ -27,7 +27,7 @@ pipelineJob('checkJunit') {
                                 archiveArtifacts artifacts: '**/build/reports/tests/test/index.html', fingerprint: true
                             }
                         }
-                    }  // <-- closes stages
+                    } // closes stages
 
                     post {
                         always {
@@ -37,7 +37,7 @@ pipelineJob('checkJunit') {
                             echo "Pipeline failed — check test reports."
                         }
                     }
-                }  // <-- closes pipeline
+                } // closes pipeline
             """.stripIndent())
             sandbox()
         }
