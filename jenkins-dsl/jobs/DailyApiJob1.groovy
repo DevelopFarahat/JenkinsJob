@@ -1,5 +1,5 @@
 pipelineJob('Daily-API-Job-1') {
-    description('Gradle build and run dailyApiCall')
+    description('Gradle build and run dailyApiCall with JUnit reporting')
 
     definition {
         cps {
@@ -23,39 +23,32 @@ pipelineJob('Daily-API-Job-1') {
 
                         stage('Run Daily API Job') {
                             steps {
+                                // Run the Gradle task that writes JUnit XML
+                                sh './gradlew dailyApiCall'
+
+                                // Let Jenkins parse the JUnit XML report
+                                junit 'build/test-results/DailyApiTaskTest.xml'
+
+                                // Capture the raw API result for email
                                 script {
-                                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                        def response = sh(
-                                            script: "./gradlew dailyApiCall",
-                                            returnStdout: true
-                                        ).trim()
-                                        echo "Daily API Call raw output:\\n\${response}"
-
-                                        env.API_RESULT = response ?: "No API result"
-
-                                        // If JSON parsing is needed:
-                                        def parsed
-                                        try {
-                                            parsed = new groovy.json.JsonSlurper().parseText(response)
-                                        } catch (Exception e) {
-                                            parsed = null
-                                        }
-
-                                        if (parsed instanceof List && !parsed.isEmpty()) {
-                                            error("Daily API Job result list is NOT empty → marking FAILURE")
-                                        }
-                                    }
+                                    def response = readFile('build/api-result.txt')
+                                    env.API_RESULT = response ?: "No API result"
                                 }
                             }
                         }
                     }
 
                     post {
-                        always {
+                        failure {
                             script {
                                 emailext(
-                                    subject: "Daily API Report - \${currentBuild.result}",
-                                    body: "<html><body><h2>Daily API Job Result: \${currentBuild.result}</h2><pre>\${env.API_RESULT}</pre></body></html>",
+                                    subject: "Daily API Job FAILED - \${currentBuild.result}",
+                                    body: "<html><body>
+                                           <h2>Daily API Job FAILED</h2>
+                                           <p>Result array:</p>
+                                           <pre>\${env.API_RESULT}</pre>
+                                           <p>See JUnit report in Jenkins for details.</p>
+                                           </body></html>",
                                     mimeType: 'text/html',
                                     to: "mohamed.farahat.attia@gmail.com"
                                 )
