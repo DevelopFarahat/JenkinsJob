@@ -26,7 +26,7 @@ pipeline {
                     // Run the Gradle task that generates the JUnit XML
                     sh './gradlew dailyApiCall'
 
-                    // Parse the JUnit XML and fail the build if it contains failures
+                    // Fail the build if the JUnit XML contains failures
                     junit testResults: 'build/test-results/DailyApiTaskTest.xml',
                           allowEmptyResults: false,
                           skipMarkingBuildUnstable: true
@@ -49,7 +49,7 @@ pipeline {
                 subject: "Daily API Job FAILED - ${currentBuild.result}",
                 body: """<html><body>
 <h2>Daily API Job FAILED</h2>
-<p>Result array / JUnit report:</p>
+<p>JUnit Report:</p>
 <pre>${env.API_RESULT}</pre>
 <p>See Jenkins JUnit report for full details.</p>
 </body></html>""",
