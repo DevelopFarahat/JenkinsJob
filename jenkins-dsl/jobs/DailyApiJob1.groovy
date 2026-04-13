@@ -24,27 +24,25 @@ pipelineJob('Daily-API-Job-1') {
                         stage('Run Daily API Job') {
                             steps {
                                 script {
-                                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                                        def jarFile = "build/libs/FirstJenkinsJob-0.0.1-SNAPSHOT.jar"
+                                    catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                                         def response = sh(
-                                            script: "java -jar \${jarFile} --job.name=dailyApiCall --spring.main.web-application-type=none",
+                                            script: "./gradlew dailyApiCall",
                                             returnStdout: true
                                         ).trim()
                                         echo "Daily API Call raw output:\\n\${response}"
 
-                                        def lastLine = response.readLines().last()
-                                        env.API_RESULT = lastLine ?: "No API result"
+                                        env.API_RESULT = response ?: "No API result"
 
+                                        // If JSON parsing is needed:
                                         def parsed
                                         try {
-                                            parsed = new groovy.json.JsonSlurper().parseText(lastLine)
+                                            parsed = new groovy.json.JsonSlurper().parseText(response)
                                         } catch (Exception e) {
                                             parsed = null
                                         }
 
                                         if (parsed instanceof List && !parsed.isEmpty()) {
-                                            currentBuild.result = 'UNSTABLE'
-                                            error("Daily API Job result list is NOT empty → marking UNSTABLE")
+                                            error("Daily API Job result list is NOT empty → marking FAILURE")
                                         }
                                     }
                                 }
