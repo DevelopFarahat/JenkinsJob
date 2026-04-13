@@ -28,16 +28,6 @@ pipelineJob('checkJunit') {
                             }
                         }
                     }
-
-                    post {
-                        always {
-                            echo "Pipeline finished — results archived."
-                        }
-                        failure {
-                            echo "Pipeline failed — check test reports."
-                        }
-                    }
-                }
             """.stripIndent())
             sandbox()
         }
