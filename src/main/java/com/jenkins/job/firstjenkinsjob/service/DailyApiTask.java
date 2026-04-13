@@ -34,7 +34,7 @@ public class DailyApiTask {
         StringBuilder xml = new StringBuilder();
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         xml.append("<testsuite name=\"DailyApiTask\" tests=\"1\" failures=\"")
-                .append(result.isEmpty() ? "0" : "1")
+                .append(!result.isEmpty() ? "0" : "1")
                 .append("\">\n");
 
         xml.append("  <testcase classname=\"DailyApiTask\" name=\"validateEmptyResult\" time=\"0\">\n");
