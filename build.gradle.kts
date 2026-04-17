@@ -32,10 +32,3 @@ tasks.named<Test>("test") {
     useJUnitPlatform()
 }
 
-tasks.register<JavaExec>("dailyApiCall") {
-    group = "application"
-    description = "Run the Daily API Call task directly"
-
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("com.jenkins.job.firstjenkinsjob.service.DailyApiTask")
-}

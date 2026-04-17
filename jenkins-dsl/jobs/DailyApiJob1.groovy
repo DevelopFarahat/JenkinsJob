@@ -1,5 +1,5 @@
 pipelineJob('Daily-API-Job-1') {
-    description('Run daily API call and fail properly with email notification')
+    description('Run daily API call via REST endpoint and fail properly with email notification')
 
     definition {
         cps {
@@ -23,10 +23,10 @@ pipeline {
         stage('Run Daily API Job') {
             steps {
                 script {
-                    // Run the Gradle task that generates the JUnit XML
-                    sh './gradlew dailyApiCall'
+                    // Call the Spring Boot endpoint instead of Gradle
+                    sh 'curl -s http://localhost:8080/daily-api-task > build/api-response.json'
 
-                    // Record test results (will mark UNSTABLE if failures exist)
+                    // The endpoint itself writes the JUnit XML file
                     junit testResults: 'build/test-results/DailyApiTaskTest.xml',
                           allowEmptyResults: false
 
